@@ -19,7 +19,7 @@ soma-lecture-filter/
 │       ├── agent1.py        # 담당자 박성현
 │       ├── agent2.py        # 담당자 김해울
 │       └── agent3.py        # 담당자 이재성
-├── requirments              # 의존성 목록
+├── requirements.txt         # 의존성 목록
 ├── .env.example             # 환경변수 예시
 └── test_main.http           # API 테스트 케이스
 ```
@@ -32,7 +32,7 @@ soma-lecture-filter/
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pip install -r requirments
+pip install -r requirements.txt
 ```
 
 ### 2. `.env` 생성
