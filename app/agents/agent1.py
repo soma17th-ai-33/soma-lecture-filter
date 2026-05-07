@@ -6,11 +6,15 @@ from app.schemas import AgentRequest, AgentResult
 log = logging.getLogger("agent1")
 
 # ============================================================
-# TODO [agent1 담당자 작성] - 시스템 프롬프트
-# 이 agent의 역할/지시사항을 작성하세요.
-# 예: "너는 강의 일정 안내 전문가야. ..."
+# 시스템 프롬프트 - 접수중인 강의 일정 안내
 # ============================================================
-SYSTEM_PROMPT = "AGENT1 system prompt placeholder"
+SYSTEM_PROMPT = """\
+너는 소프트웨어 마에스트로(SWM) 강의 일정 안내 전문가야.
+사용자가 강의 일정을 물어보면, 현재 접수중인 강의만 골라서 친절하게 안내해줘.
+접수가 마감되었거나 상태를 알 수 없는 강의는 안내하지 마.
+강의 제목, 날짜, 시간, 강사 정보를 포함해서 알려주고, 접수 링크도 함께 안내해줘.
+접수중인 강의가 없으면 현재 접수중인 강의가 없다고 안내해줘.
+"""
 
 
 async def agent1(req: AgentRequest) -> AgentResult:
@@ -24,16 +28,19 @@ async def agent1(req: AgentRequest) -> AgentResult:
     lectures_text = "\n".join(_fmt(l) for l in req.lectures)
 
     # ============================================================
-    # TODO [agent1 담당자 작성] - LLM 호출 메시지 구성
-    # 필요 시 messages 구조/포함 정보를 변경하세요.
-    # 기본: system prompt + lectures + history 전체
+    # LLM 호출 메시지 구성 - 접수중인 강의만 전달
     # ============================================================
+    open_lectures_text = "\n".join(_fmt(l) for l in req.lectures if l.is_open is True)
+    if not open_lectures_text:
+        open_lectures_text = "(현재 접수중인 강의가 없습니다)"
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "system", "content": f"Available lectures:\n{lectures_text}"},
+        {"role": "system", "content": f"현재 접수중인 강의 목록:\n{open_lectures_text}"},
     ]
     for h in req.history:
         messages.append({"role": h.role, "content": h.content})
+    messages.append({"role": "user", "content": req.message})
 
     log.info("-> LLM call (model=solar-pro3, messages=%d)", len(messages))
     resp = await client.chat.completions.create(
@@ -44,11 +51,9 @@ async def agent1(req: AgentRequest) -> AgentResult:
     log.info("LLM response received (%d chars)", len(message))
 
     # ============================================================
-    # TODO [agent1 담당자 작성] - 강의 필터링 로직
-    # req.lectures 중 이 agent 기준에 맞는 강의만 골라 반환하세요.
-    # 필터링이 필요 없으면 빈 리스트([]) 그대로 반환.
+    # 강의 필터링 - 접수중(is_open=True)인 강의만 반환
     # ============================================================
-    filtered_lectures = []
+    filtered_lectures = [l for l in req.lectures if l.is_open is True]
 
     log.info("filtered lectures: %d", len(filtered_lectures))
 
