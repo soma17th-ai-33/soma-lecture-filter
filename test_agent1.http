@@ -1,0 +1,140 @@
+# Test agent1: 접수중인 강의만 보여주기
+
+# 1. 접수중 + 마감 혼합 → 접수중인 강의만 반환
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "지금 신청할 수 있는 특강 알려줘",
+  "history": [
+    { "role": "user", "content": "지금 신청할 수 있는 특강 알려줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-25",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "is_open": true,
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-13",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "is_open": false,
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    },
+    {
+      "author": "이철수",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "14:00 ~ 16:00",
+      "is_open": true,
+      "title": "[멘토 특강] 성공하는 스타트업의 백엔드 아키텍처 설계",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10002"
+    }
+  ]
+}
+
+###
+
+# 2. 전부 마감 → 빈 리스트, 접수중인 강의 없음 안내
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "접수 가능한 강의 있어?",
+  "history": [
+    { "role": "user", "content": "접수 가능한 강의 있어?" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-10",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "is_open": false,
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-13",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "is_open": false,
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    }
+  ]
+}
+
+###
+
+# 3. is_open 미지정(null) 포함 → null/미상은 제외
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "신청 가능한 특강 목록 보여줘",
+  "history": [
+    { "role": "user", "content": "신청 가능한 특강 목록 보여줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-25",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "is_open": true,
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-13",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    },
+    {
+      "author": "이철수",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "14:00 ~ 16:00",
+      "is_open": null,
+      "title": "[멘토 특강] 성공하는 스타트업의 백엔드 아키텍처 설계",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10002"
+    }
+  ]
+}
+
+###
+
+# 4. 전부 접수중 → 전체 반환
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "이번 달 특강 일정 알려줘",
+  "history": [
+    { "role": "user", "content": "이번 달 특강 일정 알려줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-25",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "is_open": true,
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "is_open": true,
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    }
+  ]
+}
+
+###

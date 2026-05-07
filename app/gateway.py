@@ -10,7 +10,7 @@ router_log = logging.getLogger("router")
 
 ROUTER_SYSTEM = """\
 You are a router. Read the user's input and pick exactly one agent:
-- agent1: <placeholder description>
+- agent1: Provides lecture schedule information, showing only lectures that are currently open for registration.
 - agent2: Filters lectures based on date and time.
 - agent3: Recommends and filters specific lectures based on the user's personal interests and preferences.
 Respond with JSON only: {"agent": "agent1" | "agent2" | "agent3"}.
