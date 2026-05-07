@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "소마 Agent Chatbot",
+  "version": "1.0",
+  "action": {},
+  "permissions": ["tabs", "storage", "activeTab", "sidePanel", "scripting"],
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.swmaestro.ai/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "host_permissions": [
+    "https://www.swmaestro.ai/*",
+    "http://localhost:8000/*"
+  ]
+}
