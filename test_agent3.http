@@ -1,0 +1,67 @@
+# Test your FastAPI endpoints for agent3 (Interest filtering)
+
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "프론트엔드나 웹 개발 관련된 특강 있어?",
+  "history": [
+    { "role": "user", "content": "프론트엔드나 웹 개발 관련된 특강 있어?" }
+  ],
+  "lectures": [
+    {
+      "author": "김유진",
+      "dateStr": "2026-05-20",
+      "timeRangeStr": "14:00 ~ 16:00",
+      "is_open": true,
+      "title": "[멘토 특강] React와 Next.js로 시작하는 모던 웹 프론트엔드",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10001"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-13",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "is_open": true,
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    },
+    {
+      "author": "이철수",
+      "dateStr": "2026-05-25",
+      "timeRangeStr": "10:00 ~ 12:00",
+      "is_open": true,
+      "title": "[멘토 특강] 성공하는 스타트업의 백엔드 아키텍처 설계",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10002"
+    }
+  ]
+}
+
+###
+
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "난 AI 모델이나 머신러닝 쪽이 재밌더라. 추천해줄래?",
+  "history": [
+    { "role": "user", "content": "난 AI 모델이나 머신러닝 쪽이 재밌더라. 추천해줄래?" }
+  ],
+  "lectures": [
+    {
+      "author": "김유진",
+      "dateStr": "2026-05-20",
+      "timeRangeStr": "14:00 ~ 16:00",
+      "is_open": true,
+      "title": "[멘토 특강] React와 Next.js로 시작하는 모던 웹 프론트엔드",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10001"
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-13",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "is_open": true,
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212"
+    }
+  ]
+}
