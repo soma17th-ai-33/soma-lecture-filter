@@ -12,7 +12,7 @@ ROUTER_SYSTEM = """\
 You are a router. Read the user's input and pick exactly one agent:
 - agent1: <placeholder description>
 - agent2: <placeholder description>
-- agent3: <placeholder description>
+- agent3: Recommends and filters specific lectures based on the user's personal interests and preferences.
 Respond with JSON only: {"agent": "agent1" | "agent2" | "agent3"}.
 """
 
