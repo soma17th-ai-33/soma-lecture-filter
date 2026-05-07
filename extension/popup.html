@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup">
+    <div class="header">
+      <div class="header-left">
+        <div class="header-icon">⚡</div>
+        <span class="header-title">SOMA AGENT</span>
+      </div>
+      <div class="header-status" id="status">
+        <div class="status-dot"></div>
+        <span id="status-text">강의 로딩중...</span>
+      </div>
+    </div>
+    <div class="messages" id="messages">
+      <div class="empty" id="empty">
+        <div class="empty-icon">🤖</div>
+        <p>소마 멘토링 일정에 대해<br>무엇이든 물어보세요</p>
+      </div>
+    </div>
+    <div class="input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="user-input"
+          placeholder="메시지 입력... (Enter 전송, Shift+Enter 줄바꿈)"
+          rows="1"
+        ></textarea>
+        <button id="send-btn" disabled>↑</button>
+      </div>
+    </div>
+  </div>
+  <script src="marked.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
