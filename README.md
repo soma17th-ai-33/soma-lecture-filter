@@ -9,19 +9,23 @@
 
 ```
 soma-lecture-filter/
-├── main.py                  # FastAPI 진입점, /agent/run 엔드포인트
-├── app/
-│   ├── schemas.py           # 요청/응답/도메인 모델 (Pydantic)
-│   ├── llm_client.py        # AsyncOpenAI 클라이언트 (Upstage)
-│   ├── logging_setup.py     # 로깅 포맷 설정
-│   ├── gateway.py           # 라우터 + 디스패치 (오케스트레이터)
-│   └── agents/
-│       ├── agent1.py        # 담당자 박성현
-│       ├── agent2.py        # 담당자 김해울
-│       └── agent3.py        # 담당자 이재성
-├── requirements.txt         # 의존성 목록
+├── backend/
+│   ├── main.py              # FastAPI 진입점, /agent/run 엔드포인트
+│   ├── app/
+│   │   ├── schemas.py       # 요청/응답/도메인 모델 (Pydantic)
+│   │   ├── llm_client.py    # AsyncOpenAI 클라이언트 (Upstage)
+│   │   ├── logging_setup.py # 로깅 포맷 설정
+│   │   ├── gateway.py       # 라우터 + 디스패치 (오케스트레이터)
+│   │   └── agents/
+│   │       ├── agent1.py    # 담당자 박성현
+│   │       ├── agent2.py    # 담당자 김해울
+│   │       └── agent3.py    # 담당자 이재성
+│   ├── requirements.txt     # 의존성 목록
+│   └── test_main.http       # API 테스트 케이스
+├── frontend/
+│   └── extension/           # 크롬 확장 프로그램
 ├── .env.example             # 환경변수 예시
-└── test_main.http           # API 테스트 케이스
+└── README.md
 ```
 
 ---
@@ -32,7 +36,7 @@ soma-lecture-filter/
 
 ```powershell
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
 ### 2. `.env` 생성
@@ -49,6 +53,7 @@ UPSTAGE_API_KEY=up_여러분의_키
 ### 3. 서버 실행
 
 ```powershell
+cd backend
 uvicorn main:app --reload
 ```
 
@@ -70,9 +75,9 @@ Swagger UI: `http://127.0.0.1:8000/docs`
 
 ### 담당 파일
 
-- **agent1 담당자** → `app/agents/agent1.py`
-- **agent2 담당자** → `app/agents/agent2.py`
-- **agent3 담당자** → `app/agents/agent3.py`
+- **agent1 담당자** → `backend/app/agents/agent1.py`
+- **agent2 담당자** → `backend/app/agents/agent2.py`
+- **agent3 담당자** → `backend/app/agents/agent3.py`
 
 각 파일 안에 `# TODO [agentN 담당자 작성]` 박스 주석으로 수정 위치 표시되어 있습니다.
 
@@ -102,7 +107,7 @@ filtered_lectures = [l for l in req.lectures if 조건]
 
 ### 라우터 설명 갱신
 
-`app/gateway.py`의 `ROUTER_SYSTEM` 프롬프트에 각 agent 설명을 채워야
+`backend/app/gateway.py`의 `ROUTER_SYSTEM` 프롬프트에 각 agent 설명을 채워야
 LLM이 올바르게 분기합니다 (현재는 `<placeholder description>`).
 
 ```python
@@ -203,7 +208,7 @@ You are a router. Read the user's input and pick exactly one agent:
 client
   │
   ▼  POST /agent/run
-[main.py] agent_run()
+[backend/main.py] agent_run()
   │
   ▼
 [gateway.py] run_gateway()

@@ -27,3 +27,136 @@ Content-Type: application/json
 }
 
 ###
+# A. schedule + interest (다음 주 ML)
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "다음 주 ML 관련 특강 추천해줘",
+  "history": [
+    { "role": "user", "content": "다음 주 ML 관련 특강 추천해줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786",
+      "is_open": true
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212",
+      "is_open": true
+    }
+  ]
+}
+
+###
+# B. open + interest (지금 신청 가능한 백엔드)
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "지금 신청 가능한 백엔드 강의 골라줘",
+  "history": [
+    { "role": "user", "content": "지금 신청 가능한 백엔드 강의 골라줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786",
+      "is_open": true
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212",
+      "is_open": false
+    }
+  ]
+}
+
+###
+# C. open + schedule (다음 주에 신청할 수 있는)
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "다음 주에 신청할 수 있는 강의 보여줘",
+  "history": [
+    { "role": "user", "content": "다음 주에 신청할 수 있는 강의 보여줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786",
+      "is_open": true
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212",
+      "is_open": true
+    }
+  ]
+}
+
+###
+# D. triple (open + schedule + interest)
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "다음 주 접수중인 강의 중 ML 관련으로 추천해줘",
+  "history": [
+    { "role": "user", "content": "다음 주 접수중인 강의 중 ML 관련으로 추천해줘" }
+  ],
+  "lectures": [
+    {
+      "author": "김채원, 박민우, 홍지연",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "20:00 ~ 22:00",
+      "title": "[멘토 특강] Ch.2 — print() 한 줄이 API를 140배 느리게 만듭니다",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=10786",
+      "is_open": true
+    },
+    {
+      "author": "미정",
+      "dateStr": "2026-05-31",
+      "timeRangeStr": "22:00 ~ 24:00",
+      "title": "[멘토 특강] NVIDIA GPU와 LLM/VLM AI 모델을 활용한 실전 AI 서비스 구현",
+      "url": "https://www.swmaestro.ai/sw/mypage/mentoLec/view.do?qustnrSn=11212",
+      "is_open": true
+    }
+  ]
+}
+
+###
+# E. empty lectures → 안전 메시지 응답
+POST http://127.0.0.1:8000/agent/run
+Content-Type: application/json
+
+{
+  "message": "다음 주 접수중인 ML 강의",
+  "history": [
+    { "role": "user", "content": "다음 주 접수중인 ML 강의" }
+  ],
+  "lectures": []
+}
+
+###
