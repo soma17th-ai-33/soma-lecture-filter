@@ -18,29 +18,45 @@ async function loadLectures() {
   sendBtn.disabled = true;
 
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'REQUEST_CRAWL' }, (res) => {
-      if (res?.ok) {
-        setTimeout(() => {
-          chrome.storage.local.get(['lectures'], (r) => {
-            lectures = r.lectures || [];
-            if (lectures.length > 0) {
-              setStatus('ready', `강의 ${lectures.length}개 로드됨`);
-            } else {
-              setStatus('error', '강의 없음 (소마 탭 로그인 확인)');
-            }
-            sendBtn.disabled = false;
-            resolve(lectures);
-          });
-        }, 2000);
-      } else {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      if (tabs.length === 0 || !tabs[0].url.includes("swmaestro.ai")) {
         setStatus('error', '소마 탭을 열어주세요');
-        lectures = [];
         sendBtn.disabled = false;
         resolve([]);
+        return;
       }
+
+      chrome.tabs.sendMessage(tabs[0].id, { type: 'CRAWL_LECTURES' }, (res) => {
+        if (chrome.runtime.lastError) {
+          console.error(chrome.runtime.lastError);
+          setStatus('error', '새로고침(F5) 후 다시 시도해주세요.');
+          sendBtn.disabled = false;
+          resolve([]);
+          return;
+        }
+
+        if (res?.ok) {
+          setTimeout(() => {
+            chrome.storage.local.get(['lectures'], (r) => {
+              lectures = r.lectures || [];
+              if (lectures.length > 0) {
+                setStatus('ready', `강의 ${lectures.length}개 로드됨`);
+              } else {
+                setStatus('error', '강의 없음 (소마 로그인 확인)');
+              }
+              sendBtn.disabled = false;
+              resolve(lectures);
+            });
+          }, 2000);
+        } else {
+          setStatus('error', '크롤링 실패');
+          resolve([]);
+        }
+      });
     });
   });
 }
+
 function appendMessage(role, data, lectureList = []) {
   emptyEl?.remove();
 
