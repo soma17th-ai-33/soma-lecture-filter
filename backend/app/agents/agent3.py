@@ -16,8 +16,9 @@ SYSTEM_PROMPT = """\
 반드시 아래의 JSON 형식으로 응답해야 합니다.
 {
   "message": "사용자에게 전달할 추천 이유나 친절한 메시지",
-  "selected_urls": ["선택한 강의의 url 1", "선택한 강의의 url 2"]
+  "selected_indices": [0, 3, 7]
 }
+selected_indices는 강의 목록의 번호(숫자)만 넣으세요. 문자열이 아닌 정수여야 합니다.
 """
 
 
@@ -25,11 +26,11 @@ async def agent3(req: AgentRequest) -> AgentResult:
     log.info("start | history=%d | lectures=%d", len(req.history), len(req.lectures))
     client = get_client()
 
-    def _fmt(l):
+    def _fmt(i, l):
         status = "접수중" if l.is_open is True else "마감" if l.is_open is False else "상태미상"
-        return f"- [{status}] {l.title} ({l.dateStr} {l.timeRangeStr}, {l.author}) {l.url}"
+        return f"[{i}] [{status}] {l.title} ({l.dateStr} {l.timeRangeStr}, {l.author})"
 
-    lectures_text = "\n".join(_fmt(l) for l in req.lectures)
+    lectures_text = "\n".join(_fmt(i, l) for i, l in enumerate(req.lectures))
 
     # ============================================================
     # TODO [agent3 담당자 작성] - LLM 호출 메시지 구성
@@ -63,11 +64,11 @@ async def agent3(req: AgentRequest) -> AgentResult:
     try:
         llm_data = json.loads(message_content)
         final_message = llm_data.get("message", final_message)
-        selected_urls = set(llm_data.get("selected_urls", []))
-        
+        selected_indices = llm_data.get("selected_indices", [])
+
         filtered_lectures = [
-            lecture for lecture in req.lectures 
-            if lecture.url in selected_urls
+            req.lectures[i] for i in selected_indices
+            if isinstance(i, int) and 0 <= i < len(req.lectures)
         ]
     except json.JSONDecodeError:
         log.error("LLM did not return valid JSON: %s", message_content)
