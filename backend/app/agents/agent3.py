@@ -1,5 +1,4 @@
 import logging
-import json
 
 from app.llm_client import get_client
 from app.schemas import AgentRequest, AgentResult
@@ -12,14 +11,13 @@ log = logging.getLogger("agent3")
 # ============================================================
 SYSTEM_PROMPT = """\
 당신은 사용자의 관심사와 선호도를 분석하여 맞춤형 강의를 추천하는 AI 어시스턴트입니다.
-사용자의 대화 기록과 현재 요청을 바탕으로 제공된 강의 목록 중 가장 적합한 강의들을 선택하세요.
-반드시 아래의 JSON 형식으로 응답해야 합니다.
-{
-  "message": "사용자에게 전달할 추천 이유나 친절한 메시지",
-  "selected_urls": ["선택한 강의의 url 1", "선택한 강의의 url 2"]
-}
-"""
+사용자의 대화 기록과 현재 요청을 바탕으로 제공된 강의 목록 중 가장 적합한 강의들을 선택하여 추천해주세요.
 
+[응답 규칙]
+1. 분석 과정이나 판단 근거는 제외하고 친절하게 추천하는 메시지만 작성하세요.
+2. 추천하는 강의가 있다면, 강의의 제목을 정확히 언급해주세요.
+3. 강의 제목은 제공된 목록에 있는 텍스트와 완전히 동일하게 작성해야 합니다.
+"""
 
 async def agent3(req: AgentRequest) -> AgentResult:
     log.info("start | history=%d | lectures=%d", len(req.history), len(req.lectures))
@@ -46,10 +44,9 @@ async def agent3(req: AgentRequest) -> AgentResult:
     log.info("-> LLM call (model=solar-pro3, messages=%d)", len(messages))
     resp = await client.chat.completions.create(
         model="solar-pro3",
-        messages=messages,
-        response_format={"type": "json_object"}
+        messages=messages
     )
-    message_content = resp.choices[0].message.content or "{}"
+    message_content = resp.choices[0].message.content or ""
     log.info("LLM response received (%d chars)", len(message_content))
 
     # ============================================================
@@ -57,23 +54,7 @@ async def agent3(req: AgentRequest) -> AgentResult:
     # req.lectures 중 이 agent 기준에 맞는 강의만 골라 반환하세요.
     # 필터링이 필요 없으면 빈 리스트([]) 그대로 반환.
     # ============================================================
-    final_message = "강의를 추천해 드립니다."
-    filtered_lectures = []
-    
-    try:
-        llm_data = json.loads(message_content)
-        final_message = llm_data.get("message", final_message)
-        selected_urls = set(llm_data.get("selected_urls", []))
-        
-        filtered_lectures = [
-            lecture for lecture in req.lectures 
-            if lecture.url in selected_urls
-        ]
-    except json.JSONDecodeError:
-        log.error("LLM did not return valid JSON: %s", message_content)
-        final_message = message_content
-
-    log.info("filtered lectures: %d", len(filtered_lectures))
+    filtered_lectures = [l for l in req.lectures if l.title in message_content]
 
     # 반환 계약: AgentResult(message=..., lectures=...) - 변경 금지
-    return AgentResult(message=final_message, lectures=filtered_lectures)
+    return AgentResult(message=message_content, lectures=filtered_lectures)
