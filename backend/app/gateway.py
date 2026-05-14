@@ -92,15 +92,14 @@ Respond with JSON only: {"agent": "agent1" | "agent2" | "agent3"}.
 """
 
 SYNTH_SYSTEM = """\
-너는 SOMA 강의 응답 합성기다. 여러 전문 에이전트가 각자 답변을 만들어왔다.
-이를 사용자가 한 번에 읽기 좋은 한국어 한 응답으로 통합하라.
+너는 SOMA 강의 복합 응답 합성기다. 여러 전문 에이전트가 답변을 생성했고, 시스템이 이들의 교집합 조건을 만족하는 최종 강의 목록을 추출했다.
+사용자가 한 번에 읽기 좋은 한국어 응답으로 통합하라.
 
 [규칙]
-1. 같은 강의가 여러 결과에 등장하면 한 번만 언급한다.
-2. 내부 도구·에이전트 이름은 절대 노출하지 마라.
-3. 강의 제목, 날짜, 시간, 강사, URL은 보존하라. 새 강의는 만들지 마라.
-4. 사용자의 원 질문 흐름을 우선 따른다.
-5. 통합 결과가 비어 있으면 "조건에 맞는 강의를 찾지 못했습니다."로 답한다.
+1. 반드시 컨텍스트로 제공되는 '최종 필터링된 교집합 강의 목록'에 존재하는 강의들만 안내하라.
+2. [중요 UI 렌더링 규칙] 프론트엔드가 강의 목록을 전용 클릭 가능한 UI 카드로 자동 렌더링하므로, 텍스트 응답 내에서 강의 제목을 글머리 기호(-, *) 등으로 중복 나열하지 마라. 대신 자연스럽고 친절한 안내 멘트나 요약 문장(예: "요청하신 복합 조건에 부합하는 강의 목록입니다.")만 작성하라.
+3. 내부 도구·에이전트 이름은 절대 노출하지 마라.
+4. 통합 결과가 비어 있거나 교집합 강의 목록이 없으면 "조건에 맞는 강의를 찾지 못했습니다."로 답한다.
 """
 
 
@@ -190,23 +189,35 @@ async def _run_one_agent(
         return name, None
 
 
-def _dedup_lectures(groups: List[List[Lecture]]) -> List[Lecture]:
-    seen = set()
+def _intersect_lectures(groups: List[List[Lecture]]) -> List[Lecture]:
+    if not groups:
+        return []
+    base = groups[0]
     out: List[Lecture] = []
-    for group in groups:
-        for lec in group:
-            if lec.url in seen:
-                continue
-            seen.add(lec.url)
+    for lec in base:
+        in_all = True
+        for other_group in groups[1:]:
+            if not any(other_lec.url == lec.url for other_lec in other_group):
+                in_all = False
+                break
+        if in_all:
             out.append(lec)
     return out
 
 
 async def _synthesize(
-    req: AgentRequest, results: List[Tuple[str, AgentResult]]
+    req: AgentRequest, results: List[Tuple[str, AgentResult]], final_lectures: List[Lecture]
 ) -> str:
-    synth_log.info("-> LLM call (model=solar-pro3, results=%d)", len(results))
-    ctx = "\n\n".join(f"[결과 {i + 1}]\n{r.message}" for i, (_, r) in enumerate(results))
+    synth_log.info("-> LLM call (model=solar-pro3, results=%d, final_lectures=%d)", len(results), len(final_lectures))
+    
+    intersected_text = "\n".join(
+        f"- [{ '접수중' if l.is_open is True else '마감' if l.is_open is False else '상태미상' }] {l.title} ({l.dateStr} {l.timeRangeStr})"
+        for l in final_lectures
+    )
+    
+    agents_ctx = "\n\n".join(f"[결과 {i + 1}]\n{r.message}" for i, (_, r) in enumerate(results))
+    ctx = f"각 에이전트 생성 결과:\n{agents_ctx}\n\n최종 필터링된 교집합 강의 목록 (이 강의들만 안내할 것):\n{intersected_text or '(없음)'}"
+    
     resp = await llm_call(
         timeout_s=25,
         max_attempts=2,
@@ -254,8 +265,8 @@ async def run_gateway(req: AgentRequest) -> AgentResponse:
         final_message = only.message or ""
         final_lectures = list(only.lectures)
     else:
-        final_message = await _synthesize(req, successes)
-        final_lectures = _dedup_lectures([r.lectures for _, r in successes])
+        final_lectures = _intersect_lectures([r.lectures for _, r in successes])
+        final_message = await _synthesize(req, successes, final_lectures)
 
     new_history = list(req.history) + [
         HistoryMessage(role="user", content=req.message),
