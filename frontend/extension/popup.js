@@ -218,7 +218,50 @@ async function callBackend(message) {
   return {
     message: data.message,
     lectures: data.lectures || [],
+    agent_used: data.agent_used || [],
   };
+}
+
+const LECTURE_BATCH_SIZE = 5;
+
+function lectureCardHtml(lec) {
+  return `
+    <a href="${lec.url}" target="_blank" class="lecture-card">
+      <div class="lec-title">${lec.title}</div>
+      <div class="lec-meta">${lec.dateStr} ${lec.timeRangeStr} · ${lec.author}</div>
+      <div class="lec-status ${lec.is_open ? 'open' : 'closed'}">${lec.is_open ? '접수중' : '마감'}</div>
+    </a>`;
+}
+
+function renderLectureList(bubble, lectureList) {
+  const cards = document.createElement('div');
+  cards.className = 'lecture-cards';
+  bubble.appendChild(cards);
+
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'show-more-btn';
+  moreBtn.type = 'button';
+
+  let shown = 0;
+  const renderBatch = () => {
+    const next = lectureList.slice(shown, shown + LECTURE_BATCH_SIZE);
+    cards.insertAdjacentHTML('beforeend', next.map(lectureCardHtml).join(''));
+    shown += next.length;
+    const remaining = lectureList.length - shown;
+    if (remaining <= 0) {
+      moreBtn.remove();
+    } else {
+      moreBtn.textContent = `+${Math.min(LECTURE_BATCH_SIZE, remaining)}개 더보기 (${remaining}개 남음)`;
+    }
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  };
+
+  renderBatch();
+
+  if (shown < lectureList.length) {
+    moreBtn.addEventListener('click', renderBatch);
+    bubble.appendChild(moreBtn);
+  }
 }
 
 async function handleSend() {
@@ -236,34 +279,21 @@ async function handleSend() {
     removeTyping();
 
     const bubble = createAssistantBubble();
-    const replyText = typeof reply.message === 'string' ? reply.message : reply.message.join('\n');
 
-    isTyping = true;
-    sendBtn.textContent = '■';
-    sendBtn.classList.add('stopping');
-    sendBtn.disabled = false;
-
-    await typewriter(bubble, replyText);
-
-    isTyping = false;
-    sendBtn.textContent = '↑';
-    sendBtn.classList.remove('stopping');
-    sendBtn.disabled = false;
-
-    if (reply.lectures.length > 0) {
-      const cards = document.createElement('div');
-      cards.className = 'lecture-cards';
-      reply.lectures.forEach(lec => {
-        cards.innerHTML += `
-          <a href="${lec.url}" target="_blank" class="lecture-card">
-            <div class="lec-title">${lec.title}</div>
-            <div class="lec-meta">${lec.dateStr} ${lec.timeRangeStr} · ${lec.author}</div>
-            <div class="lec-status ${lec.is_open ? 'open' : 'closed'}">${lec.is_open ? '접수중' : '마감'}</div>
-          </a>`;
-      });
-      bubble.appendChild(cards);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+    if (reply.agent_used.length === 0 || reply.lectures.length === 0) {
+      // Clarification(agent_used=0) 또는 결과 없음(lectures=0): message를 typewriter로 표시
+      const replyText = typeof reply.message === 'string' ? reply.message : reply.message.join('\n');
+      isTyping = true;
+      sendBtn.textContent = '■';
+      sendBtn.classList.add('stopping');
+      sendBtn.disabled = false;
+      await typewriter(bubble, replyText);
+    } else {
+      // Agent 호출 + 결과 있음: message는 무시하고 lecture 카드만 (초과분은 더보기)
+      renderLectureList(bubble, reply.lectures);
     }
+
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   } catch (err) {
     removeTyping();
     appendMessage('assistant', `⚠️ 오류: ${err.message}`, []);
