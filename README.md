@@ -17,9 +17,10 @@ soma-lecture-filter/
 │   │   ├── logging_setup.py # 로깅 포맷 설정
 │   │   ├── gateway.py       # 라우터 + 디스패치 (오케스트레이터)
 │   │   └── agents/
-│   │       ├── agent1.py    # 담당자 박성현
-│   │       ├── agent2.py    # 담당자 김해울
-│   │       └── agent3.py    # 담당자 이재성
+│   │       ├── _common.py   # JSON index 응답 파서 (agent2/3 공용)
+│   │       ├── agent1.py    # 담당자 박성현 — 접수중 강의 결정론적 필터
+│   │       ├── agent2.py    # 담당자 김해울 — 일정(날짜·시간) 기반 필터
+│   │       └── agent3.py    # 담당자 이재성 — 관심사 기반 추천
 │   ├── requirements.txt     # 의존성 목록
 │   └── test_main.http       # API 테스트 케이스
 ├── frontend/
@@ -69,56 +70,51 @@ Swagger UI: `http://127.0.0.1:8000/docs`
 
 ## 각 agent 담당자 가이드
 
-> **주의:** 아래 내용은 어디까지나 **가이드라인**입니다.
-> 본인 agent의 요구사항에 맞게 자유롭게 수정해도 좋습니다.
-> 단, **반환 계약(`AgentResult(message=str, lectures=List[Lecture])`)** 만 지키면 gateway가 그대로 동작합니다.
+> **반환 계약:** `AgentResult(message=str, lectures=List[Lecture])` 만 지키면
+> gateway가 단일/복합 의도 모두 처리합니다. gateway가 진입 시 `req.lectures`를
+> 날짜순으로 정렬해 모든 agent에게 전달하므로, 결과를 다시 정렬할 필요 없습니다.
 
 ### 담당 파일
 
-- **agent1 담당자** → `backend/app/agents/agent1.py`
-- **agent2 담당자** → `backend/app/agents/agent2.py`
-- **agent3 담당자** → `backend/app/agents/agent3.py`
+- **agent1** (`agents/agent1.py`) — 결정론적 필터. LLM 호출 없음. `is_open=True`만 선택.
+- **agent2** (`agents/agent2.py`) — LLM 기반 일정 필터. JSON `{"message", "indices"}` 출력 + `parse_index_response`로 1-based index 매칭.
+- **agent3** (`agents/agent3.py`) — LLM 기반 관심사 추천. agent2와 동일한 JSON index 패턴.
 
-각 파일 안에 `# TODO [agentN 담당자 작성]` 박스 주석으로 수정 위치 표시되어 있습니다.
-
-### 수정 포인트 (3곳)
-
-#### 1) `SYSTEM_PROMPT` (모듈 상단 상수)
-
-이 agent의 역할/지시사항을 한국어로 작성합니다.
+### LLM 호출 패턴 (agent2/3)
 
 ```python
-SYSTEM_PROMPT = "너는 ..."
+resp = await client.chat.completions.create(
+    model="solar-pro3",
+    messages=[
+        {"role": "system", "content": SYSTEM_PROMPT},  # 또는 _build_system_prompt(now)
+        {"role": "system", "content": f"Available lectures:\n{lectures_text}"},
+        *[{"role": h.role, "content": h.content} for h in req.history[-4:]],  # 최근 2턴
+        {"role": "user", "content": req.message},
+    ],
+    response_format={"type": "json_object"},
+)
+raw = resp.choices[0].message.content or ""
+message, filtered_lectures = parse_index_response(raw, req.lectures)
+return AgentResult(message=message, lectures=filtered_lectures)
 ```
 
-#### 2) LLM 호출 메시지 구성 (`messages = [...]`)
+핵심 포인트:
+- 각 강의를 `[#N] [상태] 제목 (날짜 시간, 강사)` 형식으로 1-based index와 함께 LLM에 제시.
+- LLM은 `{"message": "...", "indices": [1, 3, 5]}` 형태로만 응답하도록 SYSTEM_PROMPT에서 강제.
+- `parse_index_response`가 range/중복/비정수 인덱스를 자동으로 걸러내 환각을 방지.
 
-기본 템플릿: `[system prompt, lectures 정보, ...history]` 순서로 구성됩니다.
-필요 시 다른 정보 추가, 순서 변경, 일부 제거 가능합니다.
+### 라우터 가이드
 
-#### 3) 강의 필터링 로직 (`filtered_lectures = []`)
+`backend/app/gateway.py`의 `ROUTER_SYSTEM_TC`는 tool-calling 라우터 프롬프트로, 우선순위 기반으로 다음 도구를 선택합니다:
 
-`req.lectures` 중 이 agent의 기준에 맞는 강의만 골라 반환합니다.
-필터링이 필요 없는 경우(예: 일반 Q&A) **빈 리스트(`[]`)** 그대로 두면 됩니다.
+| 단서 | 도구 | 매핑 agent |
+|---|---|---|
+| 주제·기술·직무 (기획/백엔드/ML 등) | `recommend_lectures_by_interest` | agent3 |
+| 날짜·요일·시간대 (5월 15일/내일/저녁 등) | `filter_lectures_by_schedule` | agent2 |
+| 단순 "접수중 강의" | `list_open_lectures` | agent1 |
+| 의도가 모호함 | `ask_clarification` | (없음, 사용자에게 되묻는 메시지 반환) |
 
-```python
-filtered_lectures = [l for l in req.lectures if 조건]
-```
-
-### 라우터 설명 갱신
-
-`backend/app/gateway.py`의 `ROUTER_SYSTEM` 프롬프트에 각 agent 설명을 채워야
-LLM이 올바르게 분기합니다 (현재는 `<placeholder description>`).
-
-```python
-ROUTER_SYSTEM = """\
-You are a router. Read the user's input and pick exactly one agent:
-- agent1: 강의 일정 안내
-- agent2: 강의 추천
-- agent3: 일반 Q&A
-...
-"""
-```
+복합 의도(예: "다음 주 저녁 ML 강의")는 여러 도구를 동시 호출 → 각 agent 결과의 URL 교집합(`_intersect_lectures`)이 최종 반환됩니다.
 
 ---
 
@@ -159,9 +155,11 @@ You are a router. Read the user's input and pick exactly one agent:
   "lectures": [
     { "author": "...", "dateStr": "...", "...": "..." }
   ],
-  "agent_used": ["agent1"]
+  "agent_used": ["filter_lectures_by_schedule"]
 }
 ```
+
+> `agent_used` 값은 라우터가 선택한 tool 이름입니다: `list_open_lectures` (→agent1), `filter_lectures_by_schedule` (→agent2), `recommend_lectures_by_interest` (→agent3). clarification 경로에서는 `[]`.
 
 ### 필드 정의
 
@@ -180,7 +178,7 @@ You are a router. Read the user's input and pick exactly one agent:
 | `message` | string | assistant가 생성한 응답 |
 | `history` | `HistoryMessage[]` | 입력 history + 새 assistant 응답 |
 | `lectures` | `Lecture[]` | agent가 필터링한 강의(없으면 `[]`) |
-| `agent_used` | `string[]` | 처리에 사용된 agent 목록 (단일 agent 처리 시 `["agent1"]` 같이 1개 원소 배열, 추후 multi-agent 흐름 시 여러 원소 가능) |
+| `agent_used` | `string[]` | 처리에 사용된 tool 이름 목록. **빈 배열 `[]`** = clarification 경로(라우터가 의도가 모호하다고 판단해 사용자에게 되묻는 메시지 반환). **1개** = 단일 의도. **여러 개** = 복합 의도(여러 agent 결과의 URL 교집합 반환). 프론트엔드는 이 길이로 메시지/카드 표시 분기 |
 
 #### HistoryMessage
 
@@ -213,31 +211,44 @@ client
   ▼
 [gateway.py] run_gateway()
   │
-  ├─▶ [gateway.py] route()           ── LLM 호출, agent 선택
+  ├─▶ req.lectures를 (dateStr, timeRangeStr) 키로 정렬
+  │
+  ├─▶ _route_with_tools()                ── tool-calling LLM (solar-pro3)
+  │     │
+  │     ├─ ask_clarification 선택 → (return) agent_used=[], lectures=[],
+  │     │                                    message=명확화 질문
+  │     │
+  │     └─ 1개 이상 일반 도구 선택 → tool_names
+  │
+  ├─▶ asyncio.gather(agent1/2/3 병렬 실행, timeout=60s)
+  │
+  ├─▶ 결과 통합
+  │     ├─ 0개 성공: "강의 정보 처리에 실패했습니다."
+  │     ├─ 1개 성공: 그대로 사용
+  │     └─ 2개+ 성공: _intersect_lectures (URL 교집합) + _synthesize 합성 메시지
+  │
+  ├─▶ final_lectures 다시 한 번 날짜순 정렬
+  │
+  ├─▶ _format_history_content: 합성 메시지 + "[직전 안내한 강의]" 요약을
+  │   assistant history에 임베드 (후속 질의 컨텍스트 보존)
   │
   ▼
-[agents/agentN.py] agentN()           ── LLM 호출 + (옵션) 강의 필터링
-  │
-  ▼
-[gateway.py] response 조립             ── history에 assistant 메시지 추가, agent_used 기록
-  │
-  ▼
-client (JSON 응답)
+client (JSON 응답: message / history / lectures / agent_used)
 ```
 
-서버 콘솔에 각 단계별 로그가 출력됩니다:
+서버 콘솔 로그 예:
 
 ```
-12:34:56 | gateway  | received request | message='...' | history=1 | lectures=2
+12:34:56 | gateway  | received request | message='5월 15일 강의' | history=0 | lectures=42
 12:34:56 | gateway  | -> routing
-12:34:56 | router   | -> LLM call (model=solar-pro3)
-12:34:57 | router   | selected: agent1
-12:34:57 | gateway  | -> dispatching to agent1
-12:34:57 | agent1   | start | history=1 | lectures=2
-12:34:57 | agent1   | -> LLM call (model=solar-pro3, messages=4)
-12:34:58 | agent1   | LLM response received (143 chars)
-12:34:58 | agent1   | filtered lectures: 0
-12:34:58 | gateway  | response ready | agent=agent1 | message_len=143 | lectures=0
+12:34:56 | router   | -> tool-calling LLM call (model=solar-pro3)
+12:34:57 | router   | selected tools: ['filter_lectures_by_schedule']
+12:34:57 | gateway  | -> dispatching to ['filter_lectures_by_schedule']
+12:34:57 | agent2   | start | history=0 | lectures=42
+12:34:57 | agent2   | -> LLM call (model=solar-pro3, messages=3)
+12:34:58 | agent2   | LLM response received (84 chars): {"message":"...", "indices":[7,12]}
+12:34:58 | agents   | parsed indices=2 | matched=2 (of 42 candidates)
+12:34:58 | gateway  | response ready | tools=['filter_lectures_by_schedule'] | message_len=24 | history_content_len=180 | lectures=2
 ```
 
 ---
