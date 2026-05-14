@@ -15,7 +15,17 @@ router_log = logging.getLogger("router")
 synth_log = logging.getLogger("synth")
 
 
-AGENT_TIMEOUT_S = float(os.getenv("AGENT_TIMEOUT_S", "35"))
+AGENT_TIMEOUT_S = float(os.getenv("AGENT_TIMEOUT_S", "60"))
+
+
+CLARIFY_TOOL_NAME = "ask_clarification"
+
+DEFAULT_CLARIFY_QUESTION = (
+    "어떤 도움을 받기를 원하시나요?\n"
+    "1. 접수 중 강의 보기\n"
+    "2. 일정(날짜·시간)으로 필터링\n"
+    "3. 관심사 기반 추천"
+)
 
 
 LECTURE_TOOLS = [
@@ -36,9 +46,10 @@ LECTURE_TOOLS = [
         "function": {
             "name": "filter_lectures_by_schedule",
             "description": (
-                "특정 날짜·요일·시간대('내일', '다음 주', '저녁') 같은 일정 조건으로 "
-                "강의를 필터링할 때 호출한다. 접수 상태와 무관하게 일정 기준 필터링이 핵심이면 "
-                "이 도구를 쓴다."
+                "특정 날짜·요일·시간대 일정 조건으로 강의를 필터링할 때 호출한다. "
+                "단서 예: 절대 날짜('5월 15일', '5/15', '15일'), 상대 날짜('내일', '모레', "
+                "'이번 주 금요일', '다음 주'), 시간대('저녁', '오전', '주말', '평일 오후'). "
+                "접수 상태와 무관하게 일정 기준 필터링이 핵심이면 이 도구를 쓴다."
             ),
             "parameters": {"type": "object", "properties": {}},
         },
@@ -48,11 +59,38 @@ LECTURE_TOOLS = [
         "function": {
             "name": "recommend_lectures_by_interest",
             "description": (
-                "관심사·직무·학습 목표(예: 'ML 관련', '백엔드 흥미 있어')에 맞는 강의를 "
-                "추천할 때 호출한다. 단순 일정 조회가 아니라 주제·내용 기반 추천이 "
-                "핵심일 때 사용한다."
+                "사용자 메시지에 주제·분야·기술·직무·학습 목표 단서가 하나라도 있으면 반드시 호출한다. "
+                "예시 단서: '기획', '백엔드', '프론트', '프론트엔드', 'ML', 'AI', '머신러닝', '데이터', "
+                "'iOS', '안드로이드', '디자인', 'UX', '보안', 'DevOps', '클라우드', 'PM', '창업', "
+                "'~관련 강의', '~흥미 있어', '~배우고 싶어', '~듣고 싶어'. "
+                "단순 일정 조회가 아니라 주제·내용 기반 추천이 핵심일 때 사용한다."
             ),
             "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": CLARIFY_TOOL_NAME,
+            "description": (
+                "사용자의 의도가 너무 모호하여 어떤 도구가 적합한지 판단할 수 없을 때만 호출한다. "
+                "예: '강의 보여줘', '뭐 있어?', '추천해줘' 처럼 어떤 종류의 필터/추천을 원하는지 "
+                "전혀 단서가 없는 경우. 사용자에게 어떤 도움을 원하는지 되묻는 친절한 한국어 "
+                "질문을 question 인자로 전달하라."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": (
+                            "사용자에게 보낼 한국어 명확화 질문. "
+                            "예: '어떤 도움을 받기를 원하시나요? 1. 접수 중 강의 2. 일정 필터 3. 관심사 추천'"
+                        ),
+                    }
+                },
+                "required": ["question"],
+            },
         },
     },
 ]
@@ -77,10 +115,18 @@ DEFAULT_TOOL = "list_open_lectures"
 
 ROUTER_SYSTEM_TC = """\
 너는 SOMA 강의 라우터다. 사용자 메시지를 읽고 적절한 도구를 호출하라.
+
+[도구 선택 가이드 — 우선순위 순]
+1. 메시지에 주제·분야·기술·직무·학습 목표 단서가 있으면(예: '기획 관련', '백엔드', '프론트', 'ML', 'AI', '디자인 공부', 'iOS 개발', '~배우고 싶어', '~듣고 싶어') → recommend_lectures_by_interest
+2. 메시지에 날짜·요일·시간대 단서가 있으면(예: '5월 15일', '5/15', '15일', '내일', '모레', '이번 주 금요일', '다음 주', '저녁', '주말', '평일 오후') → filter_lectures_by_schedule
+3. 1번과 2번이 동시에 있으면 두 도구를 함께 호출(복합 의도)
+4. 1·2번 단서가 전혀 없고 단순히 '접수중'·'오픈된'·'신청 가능한' 강의 목록을 묻는 경우 → list_open_lectures
+5. 위 어느 분류도 단정할 수 없을 만큼 모호한 경우(예: '강의 알려줘', '그냥', '도와줘', '뭐 있어?')에만 ask_clarification
+
+[규칙]
 - 단일 의도면 도구 1개만 호출.
-- 복합 의도(일정+관심사 등)는 도구를 여러 개 호출해도 된다.
-- 어떤 도구도 적합하지 않으면 list_open_lectures를 호출한다.
-부가 자연어 응답 금지. 도구 호출만으로 응답하라.
+- ask_clarification은 다른 도구와 절대 함께 호출하지 마라.
+- 부가 자연어 응답 금지. 도구 호출만으로 응답하라.
 """
 
 ROUTER_SYSTEM_JSON = """\
@@ -109,8 +155,17 @@ def _recent_history_messages(req: AgentRequest) -> List[dict]:
     return [{"role": h.role, "content": h.content} for h in req.history[-4:]]
 
 
-async def _route_with_tools(req: AgentRequest) -> List[str]:
-    """tool-calling 라우팅. 빈 결과/미지원 시 JSON 폴백."""
+RouteResult = Tuple[List[str], Optional[str]]
+
+
+async def _route_with_tools(req: AgentRequest) -> RouteResult:
+    """tool-calling 라우팅.
+
+    Returns (tool_names, clarification_question).
+    - clarification_question != None: 라우터가 의도가 모호하다고 판단 → 에이전트 호출 없이
+      사용자에게 되물어야 함. tool_names는 빈 리스트.
+    - clarification_question is None: 정상 라우팅. tool_names는 1개 이상.
+    """
     router_log.info("-> tool-calling LLM call (model=solar-pro3)")
     try:
         resp = await llm_call(
@@ -135,6 +190,16 @@ async def _route_with_tools(req: AgentRequest) -> List[str]:
         router_log.warning("no tool_calls returned, falling back to JSON")
         return await _route_via_json(req)
 
+    for tc in tool_calls:
+        if tc.function.name == CLARIFY_TOOL_NAME:
+            try:
+                args = json.loads(tc.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            question = (args.get("question") or "").strip() or DEFAULT_CLARIFY_QUESTION
+            router_log.info("router requested clarification: %r", question)
+            return [], question
+
     names: List[str] = []
     for tc in tool_calls:
         name = tc.function.name
@@ -144,12 +209,12 @@ async def _route_with_tools(req: AgentRequest) -> List[str]:
             router_log.warning("unknown tool '%s' ignored", name)
     if not names:
         router_log.warning("all tool_calls unknown, defaulting to %s", DEFAULT_TOOL)
-        return [DEFAULT_TOOL]
+        return [DEFAULT_TOOL], None
     router_log.info("selected tools: %s", names)
-    return names
+    return names, None
 
 
-async def _route_via_json(req: AgentRequest) -> List[str]:
+async def _route_via_json(req: AgentRequest) -> RouteResult:
     router_log.info("-> JSON fallback LLM call (model=solar-pro3)")
     resp = await llm_call(
         timeout_s=10,
@@ -171,7 +236,7 @@ async def _route_via_json(req: AgentRequest) -> List[str]:
         legacy = None
     tool = LEGACY_TO_TOOL.get(legacy, DEFAULT_TOOL)
     router_log.info("JSON fallback selected: %s", tool)
-    return [tool]
+    return [tool], None
 
 
 async def _run_one_agent(
@@ -189,6 +254,17 @@ async def _run_one_agent(
         return name, None
 
 
+def _sort_lectures_by_date(lectures: List[Lecture]) -> List[Lecture]:
+    """dateStr(YYYY-MM-DD) → timeRangeStr 순으로 안정 정렬.
+
+    파싱 불가능한 dateStr은 키를 "9999-99-99"로 두어 뒤로 보낸다.
+    """
+    return sorted(
+        lectures,
+        key=lambda l: (l.dateStr or "9999-99-99", l.timeRangeStr or ""),
+    )
+
+
 def _intersect_lectures(groups: List[List[Lecture]]) -> List[Lecture]:
     if not groups:
         return []
@@ -203,6 +279,25 @@ def _intersect_lectures(groups: List[List[Lecture]]) -> List[Lecture]:
         if in_all:
             out.append(lec)
     return out
+
+
+def _format_history_content(message: str, lectures: List[Lecture]) -> str:
+    """후속 대화의 라우터/에이전트 컨텍스트용. 합성 메시지 + 강의 요약을 함께 저장.
+
+    프론트엔드는 이 값을 사용하지 않지만 (agent_used 기반으로 카드만 렌더),
+    이어지는 turn에서 LLM이 '직전에 어떤 강의를 추천했는지' 알아야 후속 질의
+    ('그 중에 저녁만', 'ML 관련만 더 보여줘')를 처리할 수 있다.
+    """
+    if not lectures:
+        return message
+    lec_summary = "\n".join(
+        f"- {l.title} ({l.dateStr} {l.timeRangeStr}, "
+        f"{'접수중' if l.is_open is True else '마감' if l.is_open is False else '상태미상'})"
+        for l in lectures
+    )
+    if message:
+        return f"{message}\n\n[직전 안내한 강의]\n{lec_summary}"
+    return f"[직전 안내한 강의]\n{lec_summary}"
 
 
 async def _synthesize(
@@ -242,8 +337,24 @@ async def run_gateway(req: AgentRequest) -> AgentResponse:
         len(req.lectures),
     )
 
+    req.lectures = _sort_lectures_by_date(req.lectures)
+
     log.info("-> routing")
-    tool_names = await _route_with_tools(req)
+    tool_names, clarification = await _route_with_tools(req)
+
+    if clarification is not None:
+        log.info("-> clarification path (agent_used=[])")
+        new_history = list(req.history) + [
+            HistoryMessage(role="user", content=req.message),
+            HistoryMessage(role="assistant", content=clarification),
+        ]
+        return AgentResponse(
+            message=clarification,
+            history=new_history,
+            lectures=[],
+            agent_used=[],
+        )
+
     if not tool_names:
         log.warning("router returned empty, defaulting to %s", DEFAULT_TOOL)
         tool_names = [DEFAULT_TOOL]
@@ -268,15 +379,19 @@ async def run_gateway(req: AgentRequest) -> AgentResponse:
         final_lectures = _intersect_lectures([r.lectures for _, r in successes])
         final_message = await _synthesize(req, successes, final_lectures)
 
+    final_lectures = _sort_lectures_by_date(final_lectures)
+
+    history_content = _format_history_content(final_message, final_lectures)
     new_history = list(req.history) + [
         HistoryMessage(role="user", content=req.message),
-        HistoryMessage(role="assistant", content=final_message),
+        HistoryMessage(role="assistant", content=history_content),
     ]
 
     log.info(
-        "response ready | tools=%s | message_len=%d | lectures=%d",
+        "response ready | tools=%s | message_len=%d | history_content_len=%d | lectures=%d",
         tool_names,
         len(final_message),
+        len(history_content),
         len(final_lectures),
     )
     return AgentResponse(
